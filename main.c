@@ -16,6 +16,31 @@
 
 #include "impl.c"
 
+typedef struct {
+    void (*transpose)(int *src, int *dst, int w, int h);
+} transposeClass;
+
+#ifdef NAIVE
+void naive_init (transposeClass *naive)
+{
+    naive -> transpose = naive_transpose;
+}
+#endif
+
+#ifdef SSE
+void sse_init (transposeClass *sse)
+{
+    sse -> transpose = sse_transpose;
+}
+#endif
+
+#ifdef SSE_PREFETCH
+void sse_prefetch_init (transposeClass *sse_prefetch)
+{
+    sse_prefetch -> transpose = sse_prefetch_transpose;
+}
+#endif
+
 static long diff_in_us(struct timespec t1, struct timespec t2)
 {
     struct timespec diff;
@@ -31,6 +56,19 @@ static long diff_in_us(struct timespec t1, struct timespec t2)
 
 int main()
 {
+    /* create a handler to handle a method of transpose */
+    transposeClass *transpose_handler = malloc(sizeof(transposeClass));
+
+#ifdef NAIVE
+    naive_init(transpose_handler);
+#endif
+#ifdef SSE
+    sse_init(transpose_handler);
+#endif
+#ifdef SSE_PREFETCH
+    sse_prefetch_init(transpose_handler);
+#endif
+
     /* verify the result of 4x4 matrix */
     {
         int testin[16] = { 0, 1,  2,  3,  4,  5,  6,  7,
@@ -60,9 +98,7 @@ int main()
     {
         struct timespec start, end;
         int *src  = (int *) malloc(sizeof(int) * TEST_W * TEST_H);
-        int *out0 = (int *) malloc(sizeof(int) * TEST_W * TEST_H);
-        int *out1 = (int *) malloc(sizeof(int) * TEST_W * TEST_H);
-        int *out2 = (int *) malloc(sizeof(int) * TEST_W * TEST_H);
+        int *out = (int *) malloc(sizeof(int) * TEST_W * TEST_H);
 
         srand(time(NULL));
         for (int y = 0; y < TEST_H; y++)
@@ -70,24 +106,21 @@ int main()
                 *(src + y * TEST_W + x) = rand();
 
         clock_gettime(CLOCK_REALTIME, &start);
-        sse_prefetch_transpose(src, out0, TEST_W, TEST_H);
+        transpose_handler -> transpose(src, out, TEST_W, TEST_H);
         clock_gettime(CLOCK_REALTIME, &end);
-        printf("sse prefetch: \t %ld us\n", diff_in_us(start, end));
 
-        clock_gettime(CLOCK_REALTIME, &start);
-        sse_transpose(src, out1, TEST_W, TEST_H);
-        clock_gettime(CLOCK_REALTIME, &end);
-        printf("sse: \t\t %ld us\n", diff_in_us(start, end));
-
-        clock_gettime(CLOCK_REALTIME, &start);
-        naive_transpose(src, out2, TEST_W, TEST_H);
-        clock_gettime(CLOCK_REALTIME, &end);
+#ifdef NAIVE
         printf("naive: \t\t %ld us\n", diff_in_us(start, end));
+#endif
+#ifdef SSE
+        printf("sse: \t\t %ld us\n", diff_in_us(start, end));
+#endif
+#ifdef SSE_PREFETCH
+        printf("sse prefetch: \t %ld us\n", diff_in_us(start, end));
+#endif
 
         free(src);
-        free(out0);
-        free(out1);
-        free(out2);
+        free(out);
     }
 
     return 0;
