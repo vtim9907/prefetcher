@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include <xmmintrin.h>
+#include <immintrin.h>
 
 #define TEST_W 4096
 #define TEST_H 4096
@@ -41,6 +42,20 @@ void sse_prefetch_init (transposeClass *sse_prefetch)
 }
 #endif
 
+#ifdef AVX
+void avx_init (transposeClass *avx)
+{
+    avx -> transpose = avx_transpose;
+}
+#endif
+
+#ifdef AVX_PREFETCH
+void avx_prefetch_init (transposeClass *avx_prefetch)
+{
+    avx_prefetch -> transpose = avx_prefetch_transpose;
+}
+#endif
+
 static long diff_in_us(struct timespec t1, struct timespec t2)
 {
     struct timespec diff;
@@ -67,6 +82,12 @@ int main()
 #endif
 #ifdef SSE_PREFETCH
     sse_prefetch_init(transpose_handler);
+#endif
+#ifdef AVX
+    avx_init(transpose_handler);
+#endif
+#ifdef AVX_PREFETCH
+    avx_prefetch_init(transpose_handler);
 #endif
 
     /* verify the result of 4x4 matrix */
@@ -117,6 +138,12 @@ int main()
 #endif
 #ifdef SSE_PREFETCH
         printf("sse prefetch: \t %ld us\n", diff_in_us(start, end));
+#endif
+#ifdef AVX
+        printf("avx: \t\t %ld us\n", diff_in_us(start, end));
+#endif
+#ifdef AVX_PREFETCH
+        printf("avx prefetch: \t %ld us\n", diff_in_us(start, end));
 #endif
 
         free(src);
